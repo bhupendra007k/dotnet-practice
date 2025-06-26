@@ -38,7 +38,20 @@ namespace BankAccountStatePattern
         public int PasswordRetries { get; set; }
 
         // Constructor — only this should be implemented
-        public BankAccount(decimal cashBalance, string password, string resetCode) { }
+        public BankAccount(decimal cashBalance, string password, string resetCode)
+        {
+            CashBalance = cashBalance;
+            Password = password;
+            ResetCode = resetCode;
+            PasswordRetries = 0;
+
+            LoggedInState = new LoggedIn(this);
+            LoggedOutState = new LoggedOut(this);
+            SuspendedState = new Suspended(this);
+
+            // Initial state is LoggedOut
+            CurrentState = LoggedOutState;
+        }
 
         // These methods are helpers to forward actions to the current state
         public StateInfo Login(string password) => CurrentState.Login(password);
@@ -52,23 +65,25 @@ namespace BankAccountStatePattern
     {
         private readonly BankAccount _account;
 
-        public LoggedIn(BankAccount account) { }
-
-        public override StateInfo Login(string password)
+        public LoggedIn(BankAccount account)
         {
-            throw new NotImplementedException();
+            _account = account;
         }
+
+        public override StateInfo Login(string password) => StateInfo.LoggedIn;
         public override StateInfo Logout()
         {
-            throw new NotImplementedException();
+            _account.CurrentState = _account.LoggedOutState;
+            return StateInfo.LoggedOut;
         }
-        public override StateInfo Unlock(string resetCode)
-        {
-            throw new NotImplementedException();
-        }
+        public override StateInfo Unlock(string resetCode) => StateInfo.LoggedIn;
         public override StateInfo WithdrawMoney(decimal amount)
         {
-            throw new NotImplementedException();
+            if (amount <= _account.CashBalance)
+            {
+                _account.CashBalance -= amount;
+            }
+            return StateInfo.LoggedIn;
         }
     }
 
@@ -77,24 +92,31 @@ namespace BankAccountStatePattern
     {
         private readonly BankAccount _account;
 
-        public LoggedOut(BankAccount account) { }
+        public LoggedOut(BankAccount account)
+        {
+            _account = account;
+        }
 
-        public override StateInfo Login(string password)
-        {
-            throw new NotImplementedException();
+        public override StateInfo Login(string password) {
+            if (password == _account.Password)
+            {
+                _account.CurrentState = _account.LoggedInState;
+                return StateInfo.LoggedIn;
+            }
+            else
+            {
+                _account.PasswordRetries++;
+                if (_account.PasswordRetries >= 3)
+                {
+                    _account.CurrentState = _account.SuspendedState;
+                    return StateInfo.Suspended;
+                }
+                return StateInfo.Error; // Wrong password
+            }
         }
-        public override StateInfo Logout()
-        {
-            throw new NotImplementedException();
-        }
-        public override StateInfo Unlock(string resetCode)
-        {
-            throw new NotImplementedException();
-        }
-        public override StateInfo WithdrawMoney(decimal amount)
-        {
-            throw new NotImplementedException();
-        }
+        public override StateInfo Logout() => StateInfo.LoggedOut;
+        public override StateInfo Unlock(string resetCode) => StateInfo.LoggedOut;
+        public override StateInfo WithdrawMoney(decimal amount) => StateInfo.LoggedOut;
     }
 
     // Suspended state class
@@ -102,23 +124,23 @@ namespace BankAccountStatePattern
     {
         private readonly BankAccount _account;
 
-        public Suspended(BankAccount account) { }
+        public Suspended(BankAccount account)
+        {
+            _account = account;
+        }
 
-        public override StateInfo Login(string password)
-        {
-            throw new NotImplementedException();
-        }
-        public override StateInfo Logout()
-        {
-            throw new NotImplementedException();
-        }
+        public override StateInfo Login(string password) => StateInfo.Suspended;
+        public override StateInfo Logout() => StateInfo.Suspended;
         public override StateInfo Unlock(string resetCode)
         {
-            throw new NotImplementedException();
+            if (resetCode == _account.ResetCode)
+            {
+                _account.PasswordRetries = 0;
+                _account.CurrentState = _account.LoggedOutState;
+                return StateInfo.LoggedOut;
+            }
+            return StateInfo.Suspended; 
         }
-        public override StateInfo WithdrawMoney(decimal amount)
-        {
-            throw new NotImplementedException();
-        }
+        public override StateInfo WithdrawMoney(decimal amount) => StateInfo.Suspended;
     }
 }
